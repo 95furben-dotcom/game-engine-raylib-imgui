@@ -1,0 +1,7 @@
+-std=c++23
+-I/opt/homebrew/include
+-L/opt/homebrew/lib
+-lraylib
+
+-Ivendor/imgui 
+-Ivendor/rlImGui
