@@ -1,10 +1,11 @@
+// this is the new one
+
 #pragma once
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "raylib.h"
 #include <algorithm>
 #include <cctype>
-#include <optional>
 #include <string>
 
 #include <filesystem>
@@ -21,10 +22,11 @@ struct Explorer{
     Texture2D fileTex = LoadTexture("Resources/file.png");
     Texture2D spyglassTex = LoadTexture("Resources/spyglass.png");
     Texture2D copyTex = LoadTexture("Resources/copy.png");
+
     float childsize = 150;
     const float yxiconRatio = 0.7; 
+    
     std::string path;
-
     std::string searchbarContent;
 
     fs::directory_entry* selectedFile = nullptr;
@@ -50,7 +52,6 @@ struct Explorer{
         }
         return s;
     }
-
 
     void OpenInVSCode(const std::string& path) {
         std::string cmd = "open -a \"Visual Studio Code\" \"" + path + "\"";
@@ -80,25 +81,41 @@ struct Explorer{
 
     void DrawFileHitbox(fs::directory_entry entry, const float iconSize) {
         ImVec2 position = {(ImGui::GetWindowWidth() - iconSize) / 2, ImGui::GetStyle().ItemSpacing.x};
-        // add hitbox
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, {0, 0, 1, 0.2});
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, {0, 0.5, 1, 0.3});
         ImGui::PushStyleColor(ImGuiCol_Header, {0, 0.5, 1, 0.3});
         ImGui::SetCursorPos(position);
-        if (ImGui::Selectable("##hitbox", (selectedFile ? selectedFile->path() : "") == entry.path(),
-                            ImGuiSelectableFlags_AllowDoubleClick | ImGuiSelectableFlags_SelectOnClick,
-                            {iconSize, iconSize * yxiconRatio})) {
-            selectedFile = new fs::directory_entry(entry);
+
+
+        ImGuiSelectableFlags flags =
+            (ImGuiSelectableFlags)ImGuiSelectableFlags_AllowDoubleClick |
+            (ImGuiSelectableFlags)ImGuiSelectableFlags_SelectOnClick;
+
+        bool selected = selectedFile && selectedFile->path() == entry.path();   
+        if (ImGui::Selectable("##hitbox", selected, flags,{iconSize, iconSize * yxiconRatio})) {
             fileOffsetOnSelect = ImGui::GetWindowPos() - ImGui::GetMousePos();
             if (ImGui::IsMouseDoubleClicked(0)) {
-            if (entry.is_directory()) {
-                path = entry.path();
-                searchbarContent = "";
-            } else
-                OpenInVSCode(entry.path());
+                if (entry.is_directory()) {
+                    path = entry.path();
+                    searchbarContent = "";
+                } else{
+                    OpenInVSCode(entry.path());
+                }
             }
         }
-        
+
+        DrawSelectedFile(entry);
+
+        // Folders can also be drop targets (move files into them)
+        if (entry.is_directory() && ImGui::BeginDragDropTarget()) {
+            TraceLog(LOG_INFO, "hovering folder: %s", entry.path().c_str());
+            if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload(FILE_PAYLOAD)) {
+                fs::path src = (const char*)pl->Data;
+                std::error_code ec;
+                fs::rename(src, entry.path() / src.filename(), ec);
+            }
+            ImGui::EndDragDropTarget();
+        }
         ImGui::PopStyleColor(3);
     }
 
@@ -108,11 +125,13 @@ struct Explorer{
     }
 
     void DrawFile(const fs::directory_entry &entry, float iconSize, bool hasHitbox = true){
+        ImGuiWindowFlags wf = ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar;
+        if (!hasHitbox) wf |= ImGuiWindowFlags_NoInputs;   // preview must not catch the mouse
+
+
         ImGui::BeginChild(entry.path().c_str(),
-                            {childsize, childsize * yxiconRatio}, 0,
-                            ImGuiWindowFlags_NoScrollWithMouse |
-                                ImGuiWindowFlags_NoScrollbar);
-            ImGui::SameLine((ImGui::GetWindowWidth() - iconSize) / 2);
+                {childsize, childsize * yxiconRatio}, 0,wf);
+            ImGui::SetCursorPosX((ImGui::GetWindowWidth() - iconSize) / 2);
             if (entry.is_directory()) {
             rlImGuiImageSize(&folderTex, iconSize, iconSize);
             } else {
@@ -150,21 +169,21 @@ struct Explorer{
     }
     
     // returns on release
-    fs::directory_entry* DrawSelectedFile(float iconWinRatio = 0.40){
-        const float iconSize = iconWinRatio * childsize;    
-        if(ImGui::IsMouseDragging(ImGuiMouseButton_Left,1)){
-            ImGui::SetNextWindowPos(ImGui::GetMousePos() + fileOffsetOnSelect);
+    fs::directory_entry* DrawSelectedFile(fs::directory_entry entry, float iconWinRatio = 0.40){
+        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
             ImGui::PushStyleColor(ImGuiCol_PopupBg,{0,0,0,0});
             ImGui::PushStyleColor(ImGuiCol_Border,{0,0,0,0});
-                ImGui::BeginTooltip();
-                    DrawFile(*selectedFile, iconSize, false);
-                ImGui::EndTooltip();
+            ImGui::SetNextWindowPos(ImGui::GetMousePos() + fileOffsetOnSelect);
+
+            ImGui::BeginTooltip();
+                std::string p = entry.path().string();
+                ImGui::SetDragDropPayload(FILE_PAYLOAD, p.c_str(), p.size() + 1); // ImGui copies the bytes
+                DrawFile(entry, childsize * 0.40f, false); // preview that follows the cursor
+            ImGui::EndTooltip();
+            ImGui::EndDragDropSource();
             ImGui::PopStyleColor(2);
         }
-        else{
-            if(IsMouseButtonUp(ImGuiMouseButton_Left))
-                selectedFile = nullptr;
-        }
+        return nullptr;
     }
     void DrawExplorer(){    
         ImGui::Begin("Explorer");
@@ -178,7 +197,7 @@ struct Explorer{
             RenderPath();
             ImGui::SameLine();
             ImGui::PushItemWidth(ImGui::GetWindowWidth()/10);
-            ImGui::DragFloat("##Iconsize", &childsize, .5,1,400);
+            ImGui::DragFloat("##Iconsize", &childsize, .5,20,400);
             
             // Draw searchbar
             // align

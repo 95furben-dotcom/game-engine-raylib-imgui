@@ -19,3 +19,5 @@ inline ImVec2 operator/(const ImVec2& v, float s)
 {
     return ImVec2(v.x / s, v.y / s);
 }
+
+constexpr const char* FILE_PAYLOAD = "FILE_PATH";

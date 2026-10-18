@@ -31,7 +31,7 @@ void SetupDocking(){
 int main(){
     SetTraceLogLevel(TraceLogLevel::LOG_WARNING);
 
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
+    SetConfigFlags(FLAG_WINDOW_HIGHDPI | FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
     InitWindow(1450, 720, "SimpleEngine");
     SetTargetFPS(60);
     // SetExitKey(0);
@@ -46,7 +46,7 @@ int main(){
     std::vector<Object*> objects = {new Object("Object1"),new Object("Object2")};
     int selected = -1;
     
-    Explorer explorer("/Users/benjaminflynnfurnes/Documents/CppProjects/Raylib/GameEngine/");
+    Explorer explorer("TestProject");
     while(!WindowShouldClose()){
         BeginTextureMode(gameView);
             DrawGameWindow(gameView, objects);
@@ -80,11 +80,6 @@ int main(){
 
                 DrawInspector((selected != -1) ? objects[selected] : nullptr);
                 explorer.DrawExplorer();
-                
-                auto releasedFile = explorer.DrawSelectedFile();
-                if(releasedFile){
-                    
-                }
                 
             rlImGuiEnd();
         EndDrawing();
