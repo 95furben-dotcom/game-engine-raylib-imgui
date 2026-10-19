@@ -15,6 +15,8 @@
 
 #include <imgui_stdlib.h>
 #include "../imguihelpers.hpp"
+
+#include <fstream>
 namespace fs = std::filesystem;
 
 struct Explorer{
@@ -94,6 +96,7 @@ struct Explorer{
         bool selected = selectedFile && selectedFile->path() == entry.path();   
         if (ImGui::Selectable("##hitbox", selected, flags,{iconSize, iconSize * yxiconRatio})) {
             fileOffsetOnSelect = ImGui::GetWindowPos() - ImGui::GetMousePos();
+            selectedFile = &entry;
             if (ImGui::IsMouseDoubleClicked(0)) {
                 if (entry.is_directory()) {
                     path = entry.path();
@@ -224,6 +227,26 @@ struct Explorer{
                 DrawFiles(it);
             }
 
+            if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows |
+                                   ImGuiHoveredFlags_AllowWhenBlockedByPopup)
+                && !ImGui::IsAnyItemHovered()
+                && ImGui::IsMouseReleased(ImGuiMouseButton_Right))
+            {
+                ImGui::OpenPopup("explorer_popup");
+            }
+
+            if(ImGui::BeginPopup("explorer_popup", ImGuiPopupFlags_MouseButtonRight)){
+                if(ImGui::MenuItem("New File")) {
+                    std::ofstream file(path+"/New File");
+                    printf("made new file\n");
+                }
+                if(ImGui::MenuItem("New Folder")) {
+                    fs::create_directory(path+"/New Folder");
+                    printf("made new folder\n");
+                }
+                ImGui::EndPopup();
+            }
+
         ImGui::End();
     }
 
@@ -260,5 +283,4 @@ void PlaceCenteredWrappedText(const std::string& text, float scale, int maxLines
 
     ImGui::SetWindowFontScale(1.0f); // reset
 }
-
 };
