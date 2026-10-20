@@ -27,7 +27,7 @@ static void DrawField(const char* name, Vector2& v) {
     const float labelW  = ImGui::CalcTextSize("x:").x;      
     const float MainlabelW  = ImGui::CalcTextSize(name).x;      
 
-    const float itemW   = (ImGui::GetWindowWidth() - MainlabelW - 2*labelW - 7*spacing)/2;
+    const float itemW   = (ImGui::GetWindowWidth() - MainlabelW - 2*labelW - 7*spacing)/2.0;
 
 
     ImGui::Text("%s", name);
@@ -51,10 +51,12 @@ struct Component{
 };
 struct CompTransform : virtual Component{
     Vector2 position{};
+    Vector2 scale{};
     float rotation = 0;
 
     void DrawFileds(){
         DrawField("Position", position);
+        DrawField("Scale", scale);
         DrawField("Rotation", rotation);
     }
 };
