@@ -6,6 +6,7 @@
 #include "raylib.h"
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <string>
 
 #include <filesystem>
@@ -30,9 +31,12 @@ struct Explorer{
     
     std::string path;
     std::string searchbarContent;
+    std::string tempFilename = ""; 
+    bool isEditingName;
 
     fs::directory_entry* selectedFile = nullptr;
     ImVec2 fileOffsetOnSelect = {};
+    bool focusRename = false;
     Explorer(std::string path) : path(path){}
 
     static std::vector<std::string> split(std::string s, char c){
@@ -82,7 +86,9 @@ struct Explorer{
     }
 
     void DrawFileHitbox(fs::directory_entry entry, const float iconSize) {
-        ImVec2 position = {(ImGui::GetWindowWidth() - iconSize) / 2, ImGui::GetStyle().ItemSpacing.x};
+
+
+        ImVec2 position = {(ImGui::GetWindowWidth() - iconSize) / 2, 0};
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, {0, 0, 1, 0.2});
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, {0, 0.5, 1, 0.3});
         ImGui::PushStyleColor(ImGuiCol_Header, {0, 0.5, 1, 0.3});
@@ -94,9 +100,10 @@ struct Explorer{
             (ImGuiSelectableFlags)ImGuiSelectableFlags_SelectOnClick;
 
         bool selected = selectedFile && selectedFile->path() == entry.path();   
-        if (ImGui::Selectable("##hitbox", selected, flags,{iconSize, iconSize * yxiconRatio})) {
+        if (ImGui::Selectable("##hitbox", selected, flags,{iconSize, iconSize})) {
             fileOffsetOnSelect = ImGui::GetWindowPos() - ImGui::GetMousePos();
-            selectedFile = &entry;
+            selectedFile = new fs::directory_entry(entry);
+            printf("Entry clicked %s",selectedFile->path().filename().c_str());
             if (ImGui::IsMouseDoubleClicked(0)) {
                 if (entry.is_directory()) {
                     path = entry.path();
@@ -106,6 +113,7 @@ struct Explorer{
                 }
             }
         }
+
 
         DrawSelectedFile(entry);
 
@@ -122,11 +130,11 @@ struct Explorer{
         ImGui::PopStyleColor(3);
     }
 
-    bool ShouldShwoFile(fs::directory_entry entry){
-        if(entry.path().filename().string()[0]=='.')return false;
+    bool ShouldShowFile(fs::directory_entry entry){
+        // if(entry.path().filename().string()[0]=='.') return false;
         return searchbarContent == "" || stringInString(entry.path().filename(),searchbarContent);
     }
-
+    
     void DrawFile(const fs::directory_entry &entry, float iconSize, bool hasHitbox = true){
         ImGuiWindowFlags wf = ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar;
         if (!hasHitbox) wf |= ImGuiWindowFlags_NoInputs;   // preview must not catch the mouse
@@ -136,19 +144,48 @@ struct Explorer{
                 {childsize, childsize * yxiconRatio}, 0,wf);
             ImGui::SetCursorPosX((ImGui::GetWindowWidth() - iconSize) / 2);
             if (entry.is_directory()) {
-            rlImGuiImageSize(&folderTex, iconSize, iconSize);
+                rlImGuiImageSize(&folderTex, iconSize, iconSize);
             } else {
-            rlImGuiImageSize(&fileTex, iconSize, iconSize);
+                rlImGuiImageSize(&fileTex, iconSize, iconSize);
             }
             const float textSize =
                 ImGui::CalcTextSize(entry.path().filename().c_str(), nullptr,
                                     childsize)
                     .x;
-            PlaceCenteredWrappedText(entry.path().filename(), childsize * 0.01);
+            const bool isSelected = selectedFile && selectedFile->path() == entry.path();
+
+            if(isSelected){
+                if(!isEditingName){
+                    if(ImGui::IsKeyPressed(ImGuiKey_Enter)){
+                        isEditingName = true;
+                        tempFilename = entry.path().filename();
+                        focusRename = true;
+                    } 
+                    else
+                        PlaceCenteredWrappedText(entry.path().filename(), childsize * 0.01);
+                }
+
+                if(focusRename) ImGui::SetKeyboardFocusHere();
+                if(isEditingName){
+                    ImGui::InputText("##newfilename", &tempFilename);
+                    if(ImGui::IsItemDeactivated()){
+                        std::error_code ec;
+                        fs::path newPath = entry.path().parent_path() / tempFilename;
+                        fs::rename(selectedFile->path(), newPath, ec);
+                        isEditingName = false;
+                    }
+                }
+                focusRename = false;
+            }
+            else{
+                PlaceCenteredWrappedText(entry.path().filename(), childsize * 0.01);
+            }
 
             // Hitbox
             if(hasHitbox)
                 DrawFileHitbox(entry, iconSize);
+
+            
         ImGui::EndChild();
     }
 
@@ -160,7 +197,7 @@ struct Explorer{
         int entryIndex = 0;
 
         for (const fs::directory_entry &entry : it) {
-            if (ShouldShwoFile(entry)) {
+            if (ShouldShowFile(entry)) {
                 DrawFile(entry,iconSize);
                 entryIndex++;
                 if ((entryIndex % numIconsPerRow) != 0) {
@@ -187,6 +224,34 @@ struct Explorer{
             ImGui::PopStyleColor(2);
         }
         return nullptr;
+    }
+
+    void ManageInputs(){
+        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows |
+                                ImGuiHoveredFlags_AllowWhenBlockedByPopup)
+            && !ImGui::IsAnyItemHovered()
+            && ImGui::IsMouseReleased(ImGuiMouseButton_Right))
+        {
+            ImGui::OpenPopup("explorer_popup");
+        }
+
+        if(ImGui::BeginPopup("explorer_popup", ImGuiPopupFlags_MouseButtonRight)){
+            std::string entrypath;
+            if(ImGui::MenuItem("New File")) {
+                entrypath=path+"/New File";
+                std::ofstream file(entrypath);
+            }
+            if(ImGui::MenuItem("New Folder")) {
+                entrypath=path+"/New Folder";
+                fs::create_directory(entrypath);
+            }
+            std::error_code ec;
+            selectedFile = new fs::directory_entry(entrypath, ec);
+            isEditingName = true;
+            focusRename = true;
+            tempFilename = "";
+            ImGui::EndPopup();
+        }
     }
     void DrawExplorer(){    
         ImGui::Begin("Explorer");
@@ -226,26 +291,7 @@ struct Explorer{
             } else {
                 DrawFiles(it);
             }
-
-            if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows |
-                                   ImGuiHoveredFlags_AllowWhenBlockedByPopup)
-                && !ImGui::IsAnyItemHovered()
-                && ImGui::IsMouseReleased(ImGuiMouseButton_Right))
-            {
-                ImGui::OpenPopup("explorer_popup");
-            }
-
-            if(ImGui::BeginPopup("explorer_popup", ImGuiPopupFlags_MouseButtonRight)){
-                if(ImGui::MenuItem("New File")) {
-                    std::ofstream file(path+"/New File");
-                    printf("made new file\n");
-                }
-                if(ImGui::MenuItem("New Folder")) {
-                    fs::create_directory(path+"/New Folder");
-                    printf("made new folder\n");
-                }
-                ImGui::EndPopup();
-            }
+            ManageInputs();
 
         ImGui::End();
     }
