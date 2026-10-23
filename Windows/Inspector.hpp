@@ -16,7 +16,7 @@ static void DrawInspector(Object* object){
 
         ImGui::Text("%s", object->name.data());
         for(auto& c : object->components){
-            c->DrawFileds();
+            c->DrawFields();
         }
     ImGui::End();
 }
