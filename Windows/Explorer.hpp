@@ -10,7 +10,6 @@
 #include <string>
 
 #include <filesystem>
-#include <unordered_set>
 #include <vector>
 #include "rlImGui.h"
 #include <sstream>
@@ -108,8 +107,6 @@ struct Explorer{
     }
 
     void DrawFileHitbox(fs::directory_entry entry, const float iconSize) {
-
-
         ImVec2 position = {(ImGui::GetWindowWidth() - iconSize) / 2, 0};
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, {0, 0, 1, 0.2});
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, {0, 0.5, 1, 0.3});
@@ -134,6 +131,18 @@ struct Explorer{
                     OpenInVSCode(entry.path());
                 }
             }
+        }
+        if (ImGui::IsItemHovered()
+            && ImGui::IsMouseReleased(ImGuiMouseButton_Right))
+        {
+            ImGui::OpenPopup("file_popup");
+        }
+
+        if(ImGui::BeginPopup("file_popup", ImGuiPopupFlags_MouseButtonRight)){
+            if(ImGui::MenuItem(entry.is_directory() ? "Delete Folder" : "Delete File")){
+                fs::remove(entry.path());
+            }
+            ImGui::EndPopup();
         }
 
 
