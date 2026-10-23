@@ -1,0 +1,3 @@
+add folder and file deletion
+add undo/redo
+make selected file get set to null when clicking outside 
