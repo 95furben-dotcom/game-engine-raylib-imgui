@@ -10,6 +10,7 @@
 #include <string>
 
 #include <filesystem>
+#include <unordered_set>
 #include <vector>
 #include "rlImGui.h"
 #include <sstream>
@@ -18,6 +19,9 @@
 #include "../imguihelpers.hpp"
 
 #include <fstream>
+#include <unordered_map>
+
+
 namespace fs = std::filesystem;
 
 struct Explorer{
@@ -37,6 +41,8 @@ struct Explorer{
     fs::directory_entry* selectedFile = nullptr;
     ImVec2 fileOffsetOnSelect = {};
     bool focusRename = false;
+
+    std::vector<fs::directory_entry> entries;
     Explorer(std::string path) : path(path){}
 
     static std::vector<std::string> split(std::string s, char c){
@@ -57,6 +63,22 @@ struct Explorer{
             s += c;
         }
         return s;
+    }
+
+    void SetRenameTarget(const fs::directory_entry* entry){
+        tempFilename = "";
+        isEditingName = true;
+        focusRename = true;
+        if(entry)
+            selectedFile = new fs::directory_entry(*entry);
+    }
+
+    void FinishNameEditing(){
+        std::error_code ec;
+        fs::path newPath = selectedFile->path().parent_path() / tempFilename;
+        fs::rename(selectedFile->path(), newPath, ec);
+        isEditingName = false;
+
     }
 
     void OpenInVSCode(const std::string& path) {
@@ -135,6 +157,22 @@ struct Explorer{
         return searchbarContent == "" || stringInString(entry.path().filename(),searchbarContent);
     }
     
+    static bool IsImage(const fs::path& p) {
+        auto ext = p.extension().string();
+        for (char& c : ext) c = tolower(c);
+        return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp";
+    }
+
+    Texture2D* GetThumbnail(const fs::path& p){
+        static std::unordered_map<std::string, Texture2D> thumbs;
+        auto it = thumbs.find(p);
+        if (it != thumbs.end()) return &it->second;
+
+        Texture2D tex = LoadTexture(p.c_str());
+        thumbs[p] = tex;
+        return &thumbs[p];
+    }
+
     void DrawFile(const fs::directory_entry &entry, float iconSize, bool hasHitbox = true){
         ImGuiWindowFlags wf = ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar;
         if (!hasHitbox) wf |= ImGuiWindowFlags_NoInputs;   // preview must not catch the mouse
@@ -145,7 +183,9 @@ struct Explorer{
             ImGui::SetCursorPosX((ImGui::GetWindowWidth() - iconSize) / 2);
             if (entry.is_directory()) {
                 rlImGuiImageSize(&folderTex, iconSize, iconSize);
-            } else {
+            } else if(IsImage(entry)){
+                rlImGuiImageSize(GetThumbnail(entry.path()), iconSize, iconSize);
+            }else{
                 rlImGuiImageSize(&fileTex, iconSize, iconSize);
             }
             const float textSize =
@@ -157,9 +197,7 @@ struct Explorer{
             if(isSelected){
                 if(!isEditingName){
                     if(ImGui::IsKeyPressed(ImGuiKey_Enter)){
-                        isEditingName = true;
-                        tempFilename = entry.path().filename();
-                        focusRename = true;
+                        SetRenameTarget(&entry);
                     } 
                     else
                         PlaceCenteredWrappedText(entry.path().filename(), childsize * 0.01);
@@ -169,10 +207,7 @@ struct Explorer{
                 if(isEditingName){
                     ImGui::InputText("##newfilename", &tempFilename);
                     if(ImGui::IsItemDeactivated()){
-                        std::error_code ec;
-                        fs::path newPath = entry.path().parent_path() / tempFilename;
-                        fs::rename(selectedFile->path(), newPath, ec);
-                        isEditingName = false;
+                        FinishNameEditing();
                     }
                 }
                 focusRename = false;
@@ -246,10 +281,7 @@ struct Explorer{
                 fs::create_directory(entrypath);
             }
             std::error_code ec;
-            selectedFile = new fs::directory_entry(entrypath, ec);
-            isEditingName = true;
-            focusRename = true;
-            tempFilename = "";
+            SetRenameTarget(new fs::directory_entry(entrypath, ec));
             ImGui::EndPopup();
         }
     }
